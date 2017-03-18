@@ -60,10 +60,10 @@ class RandomForestModel():
         auc_list = []
         logloss_list = []
 
-        idx = 0
+        idx = 1
         for train, test in StratifiedKFold(labelVector, self.folds):
             print "Starting Cross Validation Fold {}".format(idx)
-            
+
             x_train, y_train = featureMatrix[train], labelVector[train]
             x_test, y_test = featureMatrix[test], labelVector[test]
             x_train = np.asarray(x_train)
@@ -84,6 +84,8 @@ class RandomForestModel():
             fpr_arrays.append(fprArray)
             tpr_arrays.append(tprArray)
             logloss_list.append(logloss_list)
+
+            idx += 1
 
         final_model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
             if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
