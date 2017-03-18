@@ -3,8 +3,8 @@ from nlp import clean_statement
 
 
 def set_overlap_score_model(questions_df):
-    def set_overlap_score(row_1, row_2):
-        set1, set2 = set(row_1["cleaned_question1_words"]), set(row_2["cleaned_question2_words"])
+    def set_overlap_score(row):
+        set1, set2 = set(row["cleaned_question1_words"]), set(row["cleaned_question2_words"])
         return 1.0 * len(set1.intersection(set2)) / len(set1.union(set2))
     questions_df["cleaned_question1_words"] = questions_df["question1"].map(clean_statement)
     questions_df["cleaned_question2_words"] = questions_df["question2"].map(clean_statement)
