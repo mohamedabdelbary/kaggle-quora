@@ -11,12 +11,9 @@ def read_data():
 if __name__ == "__main__":
     df = read_data()
     df_scored = set_overlap_score_model(df)
-    df["label"] = df["label"].map(int)
+    df["label"] = df["is_duplicate"].map(int)
 
-    import pudb
-    pudb.set_trace()
-
-    act, pred = list(df["label"]), list(df["set_overlap_score"])
+    act, pred = list(df["label"]), list(df["score"])
     logloss = binary_logloss(act, pred)
 
-    pudb.set_trace()
+    print "Log Loss is: {}".format(logloss)
