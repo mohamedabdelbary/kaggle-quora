@@ -41,13 +41,22 @@ def binary_logloss(act, pred):
     return ll
 
 
+def predict(row, model):
+    """
+    Assumes row object has a `features` column
+    with the same features as those on which
+    `model` was trained
+    """
+    return model.predict_proba(row["features"])
+
+
 class RandomForestModel():
     n_trees = 400
     # test_size = 0.3
     rf_max_features = None
     folds = 10
 
-    def train(self, training_df):
+    def train(self, training_df, cv=True):
         """
         Expects a `features` column which holds a
         list of floats to be used as features for
@@ -61,71 +70,55 @@ class RandomForestModel():
         auc_list = []
         logloss_list = []
 
-        idx = 1
-        for train, test in StratifiedKFold(labelVector, self.folds):
-            print "Starting Cross Validation Fold {}".format(idx)
+        if cv:
+            idx = 1
+            for train, test in StratifiedKFold(labelVector, self.folds):
+                print "Starting Cross Validation Fold {}".format(idx)
 
-            x_train, y_train = featureMatrix[train], labelVector[train]
-            x_test, y_test = featureMatrix[test], labelVector[test]
-            x_train = np.asarray(x_train)
-            y_train = np.asarray(y_train)
-            x_test = np.asarray(x_test)
-            y_test = np.asarray(y_test)
+                x_train, y_train = featureMatrix[train], labelVector[train]
+                x_test, y_test = featureMatrix[test], labelVector[test]
+                x_train = np.asarray(x_train)
+                y_train = np.asarray(y_train)
+                x_test = np.asarray(x_test)
+                y_test = np.asarray(y_test)
+
+                model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
+                    if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
+
+                model.fit(x_train, y_train)
+
+                predictions = model.predict_proba(x_test)[:, 1]
+                fprArray, tprArray, thres = roc_curve(y_test, predictions)
+                roc_auc = auc(fprArray, tprArray)
+                logloss = binary_logloss(y_test, predictions)
+                auc_list.append(roc_auc)
+                logloss_list.append(logloss_list)
+
+                print "CV Fold result: AUC is {auc} and Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
+                print "#########"
+
+                idx += 1
 
             model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
                 if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
 
-            model.fit(x_train, y_train)
+            roc_auc = np.mean(auc_list)
+            logloss = np.mean(logloss_list)
+            print "<======================================>"
+            print "Finished cross validation experiments!"
+            print "Average AUC is {auc} and average Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
+            print "Starting full model training!"
 
-            predictions = model.predict_proba(x_test)[:, 1]
-            fprArray, tprArray, thres = roc_curve(y_test, predictions)
-            roc_auc = auc(fprArray, tprArray)
-            logloss = binary_logloss(y_test, predictions)
-            auc_list.append(roc_auc)
-            logloss_list.append(logloss_list)
+            model.fit(featureMatrix, labelVector)
 
-            print "CV Fold result: AUC is {auc} and Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
-            print "#########"
+            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss}
+        else:
+            model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
+                if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
 
-            idx += 1
+            model.fit(featureMatrix, labelVector)
 
-        model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
-            if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
-
-        roc_auc = np.mean(auc_list)
-        logloss = np.mean(logloss_list)
-        print "<======================================>"
-        print "Finished cross validation experiments!"
-        print "Average AUC is {auc} and average Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
-        print "Starting full model training!"
-
-        model.fit(featureMatrix, labelVector)
-
-        return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss}
-
-    def predict(self, model, prediction_records):
-        """
-        Adds predictions as label onto the features dataframe by applying model
-            :type model
-            :param model: a model to be applied on the features_df
-            :type prediction_records
-            :param prediction_records: a list of dicts for which we want to produce predictions (no labels exist)
-            :rtype: list
-            :return: a list of dicts updated with `score` and `label` fields coming back from
-            model predictions
-        This is a default implementation that should work fine with a wide range of models (mainly sklearn)
-        It can also be overriden in implementing sub-classes
-        """
-
-        for record in records:
-            prediction = model.predict_proba(record.features)
-            yield {
-                "features": record["features"],
-                "features_dict": record["features_dict"],
-                "key": record["key"],
-                # "label": int(float(prediction[0][1]) > threshold),
-                "score": float(prediction[0][1])
-            }
+            return {'model': model}
 
     def compute_precision_scores(self, y_pred, y_true, prob_thresholds):
         """
