@@ -53,7 +53,9 @@ class RandomForestModel():
         list of floats to be used as features for
         the classifier
         """
-        featureMatrix, labelVector = np.array(training_df["features"]), np.array(training_df["label"])
+        featureMatrix, labelVector = training_df["features"], training_df["label"]
+        featureMatrix = np.array([list(f) for f in featureMatrix])
+        labelVector = np.array(list(labelVector))
 
         fpr_arrays = []
         tpr_arrays = []

@@ -39,7 +39,7 @@ def features(row):
 
     token_overlap_ratio = (
         0.0 if not len(q1_tokens_set.union(q2_tokens_set))
-        else 1.0 * len(q1_tokens_set.intersection(q2_tokens_set)) / len(q1_tokens_set.union(q2_tokens_set))
+        else 1.0 * float(len(q1_tokens_set.intersection(q2_tokens_set))) / len(q1_tokens_set.union(q2_tokens_set))
     )
 
     if q1_vector is not None and q2_vector is not None:
