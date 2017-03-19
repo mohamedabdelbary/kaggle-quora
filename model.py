@@ -42,7 +42,7 @@ def binary_logloss(act, pred):
 
 
 class RandomForestModel():
-    n_trees = 200
+    n_trees = 400
     # test_size = 0.3
     rf_max_features = None
     folds = 10
@@ -51,14 +51,13 @@ class RandomForestModel():
         """
         Expects a `features` column which holds a
         list of floats to be used as features for
-        the classifier
+        the classifier and an integer `label` column
+        encoding the output to be predicted
         """
         featureMatrix, labelVector = training_df["features"], training_df["label"]
         featureMatrix = np.array([list(f) for f in featureMatrix])
         labelVector = np.array(list(labelVector))
 
-        fpr_arrays = []
-        tpr_arrays = []
         auc_list = []
         logloss_list = []
 
@@ -83,21 +82,26 @@ class RandomForestModel():
             roc_auc = auc(fprArray, tprArray)
             logloss = binary_logloss(y_test, predictions)
             auc_list.append(roc_auc)
-            fpr_arrays.append(fprArray)
-            tpr_arrays.append(tprArray)
             logloss_list.append(logloss_list)
+
+            print "CV Fold result: AUC is {auc} and Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
+            print "#########"
 
             idx += 1
 
-        final_model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
+        model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
             if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
-
-        final_model.fit(featureMatrix, labelVector)
 
         roc_auc = np.mean(auc_list)
         logloss = np.mean(logloss_list)
+        print "<======================================>"
+        print "Finished cross validation experiments!"
+        print "Average AUC is {auc} and average Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
+        print "Starting full model training!"
 
-        return {'model': final_model, 'fpr_arrays': fpr_arrays, 'tpr_arrays': tpr_arrays, 'roc_auc': roc_auc}
+        model.fit(featureMatrix, labelVector)
+
+        return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss}
 
     def predict(self, model, prediction_records):
         """

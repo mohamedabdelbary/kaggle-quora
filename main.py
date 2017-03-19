@@ -1,7 +1,8 @@
 train_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/train.csv"
 
+import numpy as np
 import pandas
-from nlp import features
+from nlp import features, construct_doc_list, train_lda
 from model import set_overlap_score_model, binary_logloss, RandomForestModel
 
 
@@ -10,8 +11,20 @@ def read_data():
 
 
 if __name__ == "__main__":
-    df = read_data()
+
+    n_sample = 100000
+    full_df = read_data()
+    rows = np.random.choice(full_df.index.values, n_sample)
+    df = full_df.ix[rows]
     # df_scored = set_overlap_score_model(df)
+
+    print "Starting LDA modelling!"
+
+    doc_list_lda = list(construct_doc_list(df))
+    lda_model, dictionary, topics = train_lda(10, documents=doc_list_lda)
+
+    import pudb
+    pudb.set_trace()
 
     print "Starting feature construction!"
     df["features"] = df.apply(features, axis=1)
