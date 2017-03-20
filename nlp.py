@@ -86,10 +86,10 @@ def features(row, lda_model, word2idx_dict, n_lda_topics=10):
     q1_lda_doc = [w.lemma_.lower() for w in q1_tokens]
     q2_lda_doc = [w.lemma_.lower() for w in q2_tokens]
     q1_topic_probs = dict(
-        lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q1_lda_doc]).items())
+        lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q1_lda_doc if w in word2idx_dict]).items())
     )
     q2_topic_probs = dict(
-        lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q2_lda_doc]).items())
+        lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q2_lda_doc if w in word2idx_dict]).items())
     )
 
     q1_topic_probs = [(t, q1_topic_probs[t]) if t in q1_topic_probs else (t, 0.0) for t in range(n_lda_topics)]
