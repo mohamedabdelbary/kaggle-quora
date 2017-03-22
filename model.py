@@ -47,7 +47,7 @@ def predict(row, model):
     with the same features as those on which
     `model` was trained
     """
-    return model.predict_proba(row["features"])
+    return float(model.predict_proba(np.array(row["features"]))[0][1])
 
 
 class RandomForestModel():

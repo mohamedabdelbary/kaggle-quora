@@ -1,4 +1,5 @@
 train_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/train.csv"
+models_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/models.pkl"
 train_pred_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/train_preds.csv"
 
 

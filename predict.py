@@ -23,17 +23,29 @@ if __name__ == "__main__":
         lda_model=models["lda"],
         word2idx_dict=models["word2idx_dict"],
         n_lda_topics=len(models["topics"]))
-    test_df["features"] = test_df.apply(feature_method, axis=1)
+
+    # test_df["features"] = test_df.apply(feature_method, axis=1)
+    test_df = feature_method(test_df)
+    # import pudb
+    # pudb.set_trace()
+
+    # No need to keep raw data columns or the LDA model now.
+    # Removing to reduce memory pressure
+    test_df.drop('question1', axis=1, inplace=True)
+    test_df.drop('question2', axis=1, inplace=True)
+    models.pop("lda")
+    models.pop("word2idx_dict")
+    models.pop("topics")
 
     print  "<==================================>"
     print "Starting predicitons!"
 
-    predict_method = partial(predict, model=model_obj["model"])
+    predict_method = partial(predict, model=models["rf"])
     test_df["is_duplicate"] = test_df.apply(predict_method, axis=1)
 
     print "<===================================>"
     print "Finished predictions. Saving output!"
 
-    test_df[["id", "is_duplicate"]].to_csv(output_path, index=False)
+    test_df[["test_id", "is_duplicate"]].to_csv(output_path, index=False)
 
     print "Done!"
