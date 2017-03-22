@@ -85,6 +85,10 @@ def features(df, lda_model, word2idx_dict, n_lda_topics=10):
     More features to implement:
     - TF-IDF or similar scheme string similarity (with and without stopwords)
     - Better LDA model by incorporating children, synonyms, related concepts, subtrees
+    - Difference in lengths between both questions, ratio of lengths
+        - for full original questions
+        - noun phrases
+        - after filtering stopwords
     """
 
     features_col = pandas.Series([[]], index=np.arange(df.shape[0]))
