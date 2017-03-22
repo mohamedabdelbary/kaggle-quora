@@ -1,4 +1,5 @@
 import numpy as np
+import pandas
 import spacy
 import re
 from collections import Counter
@@ -78,53 +79,67 @@ def train_lda(n_topics, id2word_dictionary=None, documents=None, corpus=None):
     return lda_model, id2word_dictionary, word2idx_dictionary, topics
 
 
-def features(row, lda_model, word2idx_dict, n_lda_topics=10):
-    q1, q2 = row["question1"], row["question2"]
-    q1_tokens, q2_tokens = clean_statement(q1), clean_statement(q2)
+# def features(row, lda_model, word2idx_dict, n_lda_topics=10):
+def features(df, lda_model, word2idx_dict, n_lda_topics=10):
+    """
+    More features to implement:
+    - TF-IDF or similar scheme string similarity (with and without stopwords)
+    - Better LDA model by incorporating children, synonyms, related concepts, subtrees
+    """
 
-    # LDA related features
-    q1_lda_doc = [w.lemma_.lower() for w in q1_tokens]
-    q2_lda_doc = [w.lemma_.lower() for w in q2_tokens]
-    q1_topic_probs = dict(
-        lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q1_lda_doc if w in word2idx_dict]).items())
-    )
-    q2_topic_probs = dict(
-        lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q2_lda_doc if w in word2idx_dict]).items())
-    )
+    features_col = pandas.Series([[]], index=np.arange(df.shape[0]))
 
-    q1_topic_probs = [(t, q1_topic_probs[t]) if t in q1_topic_probs else (t, 0.0) for t in range(n_lda_topics)]
-    q2_topic_probs = [(t, q2_topic_probs[t]) if t in q2_topic_probs else (t, 0.0) for t in range(n_lda_topics)]
+    for (idx, row) in list(df.iterrows()):
+        q1, q2 = row["question1"], row["question2"]
+        q1_tokens, q2_tokens = clean_statement(q1), clean_statement(q2)
 
-    q1_topic_vector = np.array([prob for (topic, prob) in q1_topic_probs])
-    q2_topic_vector = np.array([prob for (topic, prob) in q2_topic_probs])
-    diff_topic_vector = q1_topic_vector - q2_topic_vector
+        # LDA related features
+        q1_lda_doc = [w.lemma_.lower() for w in q1_tokens]
+        q2_lda_doc = [w.lemma_.lower() for w in q2_tokens]
+        q1_topic_probs = dict(
+            lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q1_lda_doc if w in word2idx_dict]).items())
+        )
+        q2_topic_probs = dict(
+            lda_model.get_document_topics(Counter([word2idx_dict[w] for w in q2_lda_doc if w in word2idx_dict]).items())
+        )
 
-    q1_doc = nlp(UnicodeDammit(' '.join([w.lemma_.lower() for w in q1_tokens])).markup) if q1_tokens else None
-    q2_doc = nlp(UnicodeDammit(' '.join([w.lemma_.lower() for w in q2_tokens])).markup) if q2_tokens else None
+        q1_topic_probs = [(t, q1_topic_probs[t]) if t in q1_topic_probs else (t, 0.0) for t in range(n_lda_topics)]
+        q2_topic_probs = [(t, q2_topic_probs[t]) if t in q2_topic_probs else (t, 0.0) for t in range(n_lda_topics)]
 
-    q1_vector, q2_vector = (
-        q1_doc.vector if q1_doc and q1_doc.has_vector else None,
-        q2_doc.vector if q2_doc and q2_doc.has_vector else None
-    )
+        q1_topic_vector = np.array([prob for (topic, prob) in q1_topic_probs])
+        q2_topic_vector = np.array([prob for (topic, prob) in q2_topic_probs])
+        diff_topic_vector = q1_topic_vector - q2_topic_vector
 
-    q1_tokens_set = set(q1_tokens)
-    q2_tokens_set = set(q2_tokens)
+        q1_doc = nlp(UnicodeDammit(' '.join([w.lemma_.lower() for w in q1_tokens])).markup) if q1_tokens else None
+        q2_doc = nlp(UnicodeDammit(' '.join([w.lemma_.lower() for w in q2_tokens])).markup) if q2_tokens else None
 
-    token_overlap_ratio = (
-        0.0 if not len(q1_tokens_set.union(q2_tokens_set))
-        else 1.0 * float(len(q1_tokens_set.intersection(q2_tokens_set))) / len(q1_tokens_set.union(q2_tokens_set))
-    )
+        q1_vector, q2_vector = (
+            q1_doc.vector if q1_doc and q1_doc.has_vector else None,
+            q2_doc.vector if q2_doc and q2_doc.has_vector else None
+        )
 
-    if q1_vector is not None and q2_vector is not None:
-        dot_product = q1_vector.dot(q2_vector) 
-        cosine_sim = cosine_similarity(q1_vector, q2_vector)[0][0]
-        euclidean_dist = np.linalg.norm(q1_vector - q2_vector)
-        euclidean_lda_probs_dist = np.linalg.norm(diff_topic_vector)
-    else:
-        dot_product = cosine_sim = 0.0
-        euclidean_dist = euclidean_lda_probs_dist = 100.0
+        q1_tokens_set = set(q1_tokens)
+        q2_tokens_set = set(q2_tokens)
 
-    feature_list = [token_overlap_ratio, dot_product, cosine_sim, euclidean_dist, euclidean_lda_probs_dist]
-    feature_list.extend(list(diff_topic_vector))
+        token_overlap_ratio = (
+            0.0 if not len(q1_tokens_set.union(q2_tokens_set))
+            else 1.0 * float(len(q1_tokens_set.intersection(q2_tokens_set))) / len(q1_tokens_set.union(q2_tokens_set))
+        )
 
-    return feature_list
+        if q1_vector is not None and q2_vector is not None:
+            dot_product = q1_vector.dot(q2_vector) 
+            cosine_sim = cosine_similarity(q1_vector, q2_vector)[0][0]
+            euclidean_dist = np.linalg.norm(q1_vector - q2_vector)
+            euclidean_lda_probs_dist = np.linalg.norm(diff_topic_vector)
+        else:
+            dot_product = cosine_sim = 0.0
+            euclidean_dist = euclidean_lda_probs_dist = 100.0
+
+        feature_list = [token_overlap_ratio, dot_product, cosine_sim, euclidean_dist, euclidean_lda_probs_dist]
+        feature_list.extend(list(diff_topic_vector))
+
+        # return feature_list
+        features_col[idx] = feature_list
+
+    df["features"] = features_col
+    return df
