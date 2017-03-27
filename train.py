@@ -8,7 +8,7 @@ import numpy as np
 import pandas
 from functools import partial
 from nlp import features, construct_doc_list, train_lda
-from model import set_overlap_score_model, binary_logloss, RandomForestModel, predict
+from model import set_overlap_score_model, binary_logloss, RandomForestModel, XgBoostModel, predict_rf
 
 
 def read_data(path):
@@ -40,13 +40,19 @@ if __name__ == "__main__":
         lda_model=lda_model,
         word2idx_dict=word2idx_dictionary,
         n_lda_topics=n_lda_topics)
-    df["features"] = df.apply(feature_method, axis=1)
+    df = feature_method(df)
     df["label"] = df["is_duplicate"].map(int)
 
     print "<=================================>"
     print "Starting model training!"
-    model = RandomForestModel()
-    model_obj = model.train(df, cv=False)
+    # model = RandomForestModel()
+    # model_obj = model.train(df, cv=False)
+
+    model = XgBoostModel()
+    model_obj = model.train(df)
+
+    import pudb
+    pudb.set_trace()
 
     print "<==================================>"
     print "Finished model training!"

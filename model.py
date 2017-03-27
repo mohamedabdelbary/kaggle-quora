@@ -7,6 +7,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 
+import xgboost as xgb
+
 
 def set_overlap_score_model(questions_df):
     """
@@ -41,13 +43,103 @@ def binary_logloss(act, pred):
     return ll
 
 
-def predict(row, model):
+def xgboost_eval(act, pred):
+    return 'error', binary_logloss(act, pred)
+
+
+def predict_rf(row, model):
     """
     Assumes row object has a `features` column
     with the same features as those on which
     `model` was trained
     """
     return float(model.predict_proba(np.array(row["features"]))[0][1])
+
+
+def predict_xgboost(row, model):
+    """
+    Assumes row object has a `features` column
+    with the same features as those on which
+    `model` was trained
+    """
+    return float(model.predict(np.array(row["features"]))[0])
+
+
+class XgBoostModel():
+    n_trees = 400
+    max_depth = 4
+    eval_metric = "logloss"
+    early_stopping_rounds = 50
+    folds = 10
+
+    def train(self, training_df, cv=True):
+        """
+        Expects a `features` column which holds a
+        list of floats to be used as features for
+        the classifier and an integer `label` column
+        encoding the output to be predicted
+        """
+        featureMatrix, labelVector = training_df["features"], training_df["label"]
+        featureMatrix = np.array([list(f) for f in featureMatrix])
+        labelVector = np.array(list(labelVector))
+
+        # fullMatrix = np.concatenate((featureMatrix, labelVector.T), axis=1)
+
+        auc_list = []
+        logloss_list = []
+
+        if cv:
+            idx = 1
+            for train, test in StratifiedKFold(labelVector, self.folds):
+                print "Starting Cross Validation Fold {}".format(idx)
+
+                x_train, y_train = featureMatrix[train], labelVector[train]
+                x_test, y_test = featureMatrix[test], labelVector[test]
+                x_train = np.asarray(x_train)
+                y_train = np.asarray(y_train)
+                x_test = np.asarray(x_test)
+                y_test = np.asarray(y_test)
+
+                model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
+                model.fit(
+                    x_train,
+                    y_train,
+                    eval_metric=self.eval_metric,
+                    eval_set=[(x_train, y_train), (x_test, y_test)],
+                    verbose=True,
+                    early_stopping_rounds=self.early_stopping_rounds
+                )
+
+                predictions = model.predict(x_test)
+                fprArray, tprArray, thres = roc_curve(y_test, predictions)
+                roc_auc = auc(fprArray, tprArray)
+                logloss = binary_logloss(y_test, predictions)
+                auc_list.append(roc_auc)
+                logloss_list.append(logloss_list)
+
+                print "CV Fold result: AUC is {auc} and Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
+                print "#########"
+
+                idx += 1
+
+            roc_auc = np.mean(auc_list)
+            logloss = np.mean(logloss_list)
+            print "<======================================>"
+            print "Finished cross validation experiments!"
+            print "Average AUC is {auc} and average Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
+            print "Starting full model training!"
+
+            model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
+            model.fit(featureMatrix, labelVector, eval_metric=self.eval_metric)#, early_stopping_rounds=self.early_stopping_rounds)
+            # make prediction
+            # preds = model.predict(x_test)
+
+            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss}
+        else:
+            model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
+            model.fit(featureMatrix, labelVector, eval_metric=self.eval_metric)#, early_stopping_rounds=self.early_stopping_rounds)
+
+            return {'model': model}
 
 
 class RandomForestModel():
