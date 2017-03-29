@@ -175,6 +175,20 @@ def features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights={}):
     - Number of sentences in both questions, ratios, difference in number
     - Question tokens in both questions (why, how, when, what, ..), set intersection, difference, etc
     - Stop words in both questions, stopq1/len(q1), stopq2/len(q2), stopq1.intersect(stopq2),...
+
+    - Common Bigrams/Trigrams
+    - Country specific features: countries or locations mentioned in both questions
+    - More features from LDA model topic probability vectors
+        - Appending both vectors
+        - [p1/p2 for (p1,p2) in zip(vector_1, vector2)]
+        - cosine sim
+    - Features specific to each question separately
+        - Length of q1
+        - Length of q2
+        - # sentences in q1
+        - # sentences in q2
+        - # words in q1
+        - # words in q2
     """
 
     features_col = pandas.Series([[]], index=np.arange(df.shape[0]))
