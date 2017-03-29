@@ -38,7 +38,7 @@ if __name__ == "__main__":
     models.pop("word_weights")
 
     print  "<==================================>"
-    print "Starting predicitons!"
+    print "Starting predictions!"
 
     predict_method = partial(predict_rf, model=models["rf"])
     test_df["is_duplicate"] = test_df.apply(predict_method, axis=1)
