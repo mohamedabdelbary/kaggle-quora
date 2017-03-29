@@ -53,7 +53,9 @@ def predict_rf(row, model):
     with the same features as those on which
     `model` was trained
     """
-    return float(model.predict_proba(np.array(row["features"]))[0][1])
+    f = np.array(row["features"])
+    f = np.nan_to_num(f)
+    return float(model.predict_proba(f)[0][1])
 
 
 def predict_xgboost(row, model):

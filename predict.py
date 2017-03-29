@@ -1,6 +1,6 @@
 test_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/test.csv"
-models_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/models.pkl"
-output_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/test_predictions.csv"
+models_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/models_v1_with_oversampling.pkl"
+output_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/test_predictions_v1.csv"
 
 
 import pickle
@@ -8,7 +8,7 @@ import numpy as np
 import pandas
 from functools import partial
 from nlp import features, construct_doc_list, train_lda
-from model import set_overlap_score_model, binary_logloss, RandomForestModel, predict
+from model import binary_logloss, RandomForestModel, predict_rf
 
 
 if __name__ == "__main__":
@@ -22,12 +22,11 @@ if __name__ == "__main__":
         features,
         lda_model=models["lda"],
         word2idx_dict=models["word2idx_dict"],
-        n_lda_topics=len(models["topics"]))
+        n_lda_topics=len(models["topics"]),
+        word_weights=models["word_weights"])
 
     # test_df["features"] = test_df.apply(feature_method, axis=1)
     test_df = feature_method(test_df)
-    # import pudb
-    # pudb.set_trace()
 
     # No need to keep raw data columns or the LDA model now.
     # Removing to reduce memory pressure
@@ -36,11 +35,12 @@ if __name__ == "__main__":
     models.pop("lda")
     models.pop("word2idx_dict")
     models.pop("topics")
+    models.pop("word_weights")
 
     print  "<==================================>"
     print "Starting predicitons!"
 
-    predict_method = partial(predict, model=models["rf"])
+    predict_method = partial(predict_rf, model=models["rf"])
     test_df["is_duplicate"] = test_df.apply(predict_method, axis=1)
 
     print "<===================================>"

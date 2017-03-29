@@ -2,15 +2,24 @@ import numpy as np
 import pandas
 import spacy
 import re
+import math
 from collections import Counter
 from bs4 import UnicodeDammit
 
 from gensim import corpora
 from gensim.models.ldamodel import LdaModel
+from nltk.corpus import stopwords
 
 from sklearn.metrics.pairwise import cosine_similarity
 
 nlp = spacy.load("en")
+stops = set(stopwords.words("english"))
+
+question_tokens = set(["why", "how", "what", "when", "which", "who", "whose", "whom"])
+
+
+def remove_punc(s):
+    return re.sub(r'[^\w\s]', '', UnicodeDammit(str(s)).markup)
 
 
 def clean_statement(s):
@@ -20,7 +29,7 @@ def clean_statement(s):
     """
 
     # Remove punctuation
-    s = re.sub(r'[^\w\s]', '', UnicodeDammit(str(s)).markup)
+    s = remove_punc(s)
     sentence = nlp(s)
     sentence_with_stop_checks = [(sentence[i], sentence[i].is_stop) for i in range(len(sentence))]
 
@@ -79,8 +88,82 @@ def train_lda(n_topics, id2word_dictionary=None, documents=None, corpus=None):
     return lda_model, id2word_dictionary, word2idx_dictionary, topics
 
 
-# def features(row, lda_model, word2idx_dict, n_lda_topics=10):
-def features(df, lda_model, word2idx_dict, n_lda_topics=10):
+# If a word appears only once, we ignore it completely (likely a typo)
+# Epsilon defines a smoothing constant, which makes the effect of extremely rare words smaller
+def get_weight(count, eps=10000, min_count=2):
+    if count < min_count:
+        return 0
+    else:
+        return 1.0 / (count + eps)
+
+
+def get_word_weights(df):
+    questions = pandas.Series(df['question1'].tolist() + df['question2'].tolist()).astype(str)
+    questions = [remove_punc(q).lower() for q in questions]
+    eps = 500
+    words = (" ".join(questions)).lower().split()
+    counts = Counter(words)
+    return {word: get_weight(count, eps=eps) for word, count in counts.items()}
+
+
+def tfidf_word_match_share(row, weights):
+    q1words = {}
+    q2words = {}
+    for word in remove_punc(row['question1']).lower().split():
+        if word not in stops:
+            q1words[word] = 1
+    for word in remove_punc(row['question2']).lower().split():
+        if word not in stops:
+            q2words[word] = 1
+    if len(q1words) == 0 or len(q2words) == 0:
+        # The computer-generated chaff includes a few questions that are nothing but stopwords
+        return 0
+    
+    shared_weights = [weights.get(w, 0) for w in q1words.keys() if w in q2words] + [weights.get(w, 0) for w in q2words.keys() if w in q1words]
+    total_weights = [weights.get(w, 0) for w in q1words] + [weights.get(w, 0) for w in q2words]
+    
+    R = np.sum(shared_weights) / np.sum(total_weights)
+    return R
+
+
+def weighted_token_overlap_score(row):
+    cleaned_question1_words = clean_statement(row["question1"])
+    cleaned_question2_words = clean_statement(row["question2"])
+    
+    set1, set2 = \
+        (set([w.lemma_.lower() for w in cleaned_question1_words]),
+         set([w.lemma_.lower() for w in cleaned_question2_words]))
+        
+    return \
+    (1.0 * len(set1.intersection(set2)) / (len(set1.union(set2)) or 1)) * \
+    (
+        min(len(str(row["question1"])), len(str(row["question2"]))) / 
+        (1.0 * max(len(str(row["question1"])), len(str(row["question2"]))))
+    )
+    
+
+def stops_ratios(row):
+    q1_tokens = [t.lower() for t in remove_punc(row["question1"]).split()]
+    q2_tokens = [t.lower() for t in remove_punc(row["question2"]).split()]
+    q1_stops = set([t for t in q1_tokens if t in stops])
+    q2_stops = set([t for t in q2_tokens if t in stops])
+    return (
+        float(len(q1_stops.intersection(q2_stops))) / (len(q1_stops.union(q2_stops)) or 1.0),
+        float(len(q1_stops)) / (len(q1_tokens) or 1.0),
+        float(len(q2_stops)) / (len(q2_tokens) or 1.0),
+        math.fabs(float(len(q1_stops)) / (len(q1_tokens) or 1.0) - float(len(q2_stops)) / (len(q2_tokens) or 1.0))
+    )
+
+
+def question_tokens_ratio(row):
+    q1_quest_tokens = set([t.lower() for t in remove_punc(row["question1"]) if t.lower() in question_tokens])
+    q2_quest_tokens = set([t.lower() for t in remove_punc(row["question2"]) if t.lower() in question_tokens])
+    return (
+        float(len(q1_quest_tokens.intersection(q2_quest_tokens))) / (len(q1_quest_tokens.union(q2_quest_tokens)) or 1.0)
+    )
+
+
+def features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights={}):
     """
     More features to implement:
     - TF-IDF or similar scheme string similarity (with and without stopwords)
@@ -89,6 +172,9 @@ def features(df, lda_model, word2idx_dict, n_lda_topics=10):
         - for full original questions
         - noun phrases
         - after filtering stopwords
+    - Number of sentences in both questions, ratios, difference in number
+    - Question tokens in both questions (why, how, when, what, ..), set intersection, difference, etc
+    - Stop words in both questions, stopq1/len(q1), stopq2/len(q2), stopq1.intersect(stopq2),...
     """
 
     features_col = pandas.Series([[]], index=np.arange(df.shape[0]))
@@ -129,6 +215,15 @@ def features(df, lda_model, word2idx_dict, n_lda_topics=10):
             0.0 if not len(q1_tokens_set.union(q2_tokens_set))
             else 1.0 * float(len(q1_tokens_set.intersection(q2_tokens_set))) / len(q1_tokens_set.union(q2_tokens_set))
         )
+        
+        # TF-IDF sim
+        tf_idf_sim = tfidf_word_match_share(row, word_weights)
+
+        # token overlap weighted by min_q_length / max_q_length
+        wt_token_overlap_score = weighted_token_overlap_score(row)
+        
+        # Stop word occurrence
+        (stops_ratio, stops_ratio_q1, stops_ratio_q2, stops_diff) = stops_ratios(row)
 
         if q1_vector is not None and q2_vector is not None:
             dot_product = q1_vector.dot(q2_vector) 
@@ -137,9 +232,23 @@ def features(df, lda_model, word2idx_dict, n_lda_topics=10):
             euclidean_lda_probs_dist = np.linalg.norm(diff_topic_vector)
         else:
             dot_product = cosine_sim = 0.0
-            euclidean_dist = euclidean_lda_probs_dist = 100.0
+            euclidean_dist = euclidean_lda_probs_dist = 100.0 # Not a very good hack
 
-        feature_list = [token_overlap_ratio, dot_product, cosine_sim, euclidean_dist, euclidean_lda_probs_dist]
+        feature_list = [
+            token_overlap_ratio,
+            float(token_overlap_ratio == 0),
+            float(token_overlap_ratio == 1),
+            dot_product,
+            cosine_sim,
+            # euclidean_dist,
+            # euclidean_lda_probs_dist,
+            tf_idf_sim,
+            wt_token_overlap_score,
+            stops_ratio,
+            stops_ratio_q1,
+            stops_ratio_q2,
+            stops_diff
+        ]
         feature_list.extend(list(diff_topic_vector))
 
         # return feature_list
