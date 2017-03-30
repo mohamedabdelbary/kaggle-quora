@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     # Resampling process to oversample negative cases
     print "Oversampling the majority class to match test set!"
-    df = oversample_non_duplicates(df)
+    # df = oversample_non_duplicates(df)
 
     # Get word weights based on counts
     weights = get_word_weights(df)

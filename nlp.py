@@ -173,7 +173,6 @@ def features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights={}):
         - noun phrases
         - after filtering stopwords
     - Number of sentences in both questions, ratios, difference in number
-    - Question tokens in both questions (why, how, when, what, ..), set intersection, difference, etc
     - Stop words in both questions, stopq1/len(q1), stopq2/len(q2), stopq1.intersect(stopq2),...
 
     - Common Bigrams/Trigrams
@@ -189,6 +188,11 @@ def features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights={}):
         - # sentences in q2
         - # words in q1
         - # words in q2
+    - Question tokens in both questions (why, how, when, what, ..): count in each q, set intersection, difference, etc
+    - Naive encoding of question word rules as boolean vars
+        - Is "what" in q1 and in q2?
+        - Is "what" in q1 and "how" in q2?
+        ... repeat for the most common 6 tokens "why", "how", "what", "when", "which", "who"
     """
 
     features_col = pandas.Series([[]], index=np.arange(df.shape[0]))
