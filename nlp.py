@@ -10,6 +10,9 @@ from gensim import corpora
 from gensim.models.ldamodel import LdaModel
 from nltk.corpus import stopwords
 
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics.pairwise import cosine_similarity
 
 nlp = spacy.load("en")
@@ -50,6 +53,28 @@ def construct_doc_list(df):
 
         yield q1_doc
         yield q2_doc
+
+
+def train_naive_bayes(documents):
+    # count_vect = CountVectorizer(ngram_range=(1, 5), min_df=1)
+    # counts = count_vect.fit_transform(documents.text.values)
+    # model = MultinomialNB()
+    # model.fit(counts, documents.target.ravel())
+
+    # return count_vect, model
+
+    X = pandas.DataFrame(documents.text)
+    y = pandas.DataFrame(documents.target)
+
+    model = Pipeline([
+        ('count', CountVectorizer(ngram_range=(1, 3), min_df=1)),
+        ('tfidf', TfidfTransformer()),
+        ('clf',   MultinomialNB(alpha=0.1)),
+    ])
+
+    model.fit(X.text, y.values)
+
+    return model
 
 
 def train_lda(n_topics, id2word_dictionary=None, documents=None, corpus=None):
