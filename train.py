@@ -1,8 +1,10 @@
 train_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/train.csv"
 models_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/models_v1_with_oversampling.pkl"
+lda_model_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/lda_model.pkl"
 train_pred_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/train_preds.csv"
 
 
+import sys
 import pickle
 import numpy as np
 import pandas
@@ -40,64 +42,32 @@ def oversample_non_duplicates(df):
 
 if __name__ == "__main__":
 
-    n_sample = 200000
-    full_df = read_data(train_path)
-    rows = np.random.choice(full_df.index.values, n_sample)
-    df = full_df.ix[rows]
+    # n_sample = 200000
+    # full_df = read_data(train_path)
+    # rows = np.random.choice(full_df.index.values, n_sample)
+    # df = full_df.ix[rows]
 
-    # df = read_data(train_path)
-
-    # Resampling process to oversample negative cases
-    print "Oversampling the majority class to match test set!"
-    # df = oversample_non_duplicates(df)
-
-    # Get word weights based on counts
-    weights = get_word_weights(df)
-
-    n_lda_topics = 20
-    print "Starting LDA modelling!"
-
-    doc_list_lda_train = list(construct_doc_list(df))
-    lda_model, id2word_dictionary, word2idx_dictionary, topics = \
-        train_lda(n_lda_topics,
-                  documents=doc_list_lda_train)
-
-    print "<================================>"
-
-    print "Starting feature construction!"
-    feature_method = partial(
-        features,
-        lda_model=lda_model,
-        word2idx_dict=word2idx_dictionary,
-        n_lda_topics=n_lda_topics,
-        word_weights=weights)
-    df = feature_method(df)
-    df["label"] = df["is_duplicate"].map(int)
+    train_set_features_path = sys.argv[1]
+    df = read_data(train_set_features_path)
 
     print "<=================================>"
     print "Starting model training!"
-    model = RandomForestModel()
-    model_obj = model.train(df, cv=False)
 
-    # model = XgBoostModel()
-    # model_obj = model.train(df)
+    model_type = sys.argv[2]
+    if model_type == 'rf':
+        model = RandomForestModel()
+        model_obj = model.train(df, cv=False)
+
+    elif model_type == 'xgb':
+        model = XgBoostModel()
+        model_obj = model.train(df)
 
     print "<==================================>"
     print "Finished model training!"
 
-    print "Running predictions on training set!"
-
-    # predict_method = partial(predict, model=model_obj["model"])
-    # df["pred"] = df.apply(predict_method, axis=1)
-
     print "Saving training results!"
     models = {
-        "rf": model_obj["model"],
-        "lda": lda_model,
-        "id2word_dict": id2word_dictionary,
-        "word2idx_dict": word2idx_dictionary,
-        "topics": topics,
-        "word_weights": weights
+        model_type: model_obj["model"],
     }
 
     # df.to_csv(train_pred_path, index=False)
