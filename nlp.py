@@ -516,6 +516,14 @@ def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights
     # Vector feature
     df["diff_lda_topic_vector"] = df.apply(lda_meth, axis=1)
 
+    # Expand vector feature into multiple columns
+    diff_lda_topic_vector = df['diff_lda_topic_vector'].apply(pandas.Series)
+
+    # rename each variable is tags
+    diff_lda_topic_vector = diff_lda_topic_vector.rename(columns=lambda x : 'diff_lda_topic_vector_' + str(x))
+
+    df = pandas.concat([df[:], diff_lda_topic_vector[:]], axis=1)
+
     df["token_overlap_ratio"] = df.apply(token_overlap_ratio, axis=1)
     df["no_token_overlap"] = df.apply(no_token_overlap, axis=1)
     df["full_token_overlap"] = df.apply(full_token_overlap, axis=1)
@@ -555,6 +563,14 @@ def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights
     # Question token pair vars
     # Vector feature
     df["q_token_pair_vars"] = df.apply(q_token_pair_vars, axis=1)
+
+    # Expand vector feature into multiple columns
+    q_token_pair_vars_series = df['q_token_pair_vars'].apply(pandas.Series)
+
+    # rename each variable is tags
+    q_token_pair_vars_series = q_token_pair_vars_series.rename(columns=lambda x : 'q_token_pair_vars_' + str(x))
+
+    df = pandas.concat([df[:], q_token_pair_vars_series[:]], axis=1)
     
     # Basic Sentiment analysis
     df["q1_subjectivity"] = df["q1_no_punc"].apply(string_subjectivity)
