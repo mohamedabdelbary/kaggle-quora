@@ -70,7 +70,7 @@ if __name__ == "__main__":
     print "Combining feature DF's!"
     outpath_list = [output_path.split(".")[0] + str(idx) + "." + output_path.split(".")[-1] for idx in range(num_split)]
 
-    full_df_features = pandas.concat([pandas.read_csv(df_path) for df_path in path_list])
+    full_df_features = pandas.concat([pandas.read_csv(df_path) for df_path in outpath_list])
 
     print "Removing remaining temp files!"
     for p in outpath_list:
