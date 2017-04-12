@@ -152,7 +152,7 @@ class XgBoostModel():
             # make prediction
             # preds = model.predict(x_test)
 
-            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'xgb'}
+            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'xgb', 'features': feature_cols}
         else:
             params = {}
             params['objective'] = self.objective
@@ -176,7 +176,7 @@ class XgBoostModel():
                 early_stopping_rounds=self.early_stopping_rounds
             )
 
-            return {'model': model, 'type': 'xgb'}
+            return {'model': model, 'type': 'xgb', 'features': feature_cols}
 
 
 class RandomForestModel():
@@ -230,6 +230,8 @@ class RandomForestModel():
 
                 idx += 1
 
+            return
+
             model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
                 if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
 
@@ -242,14 +244,14 @@ class RandomForestModel():
 
             model.fit(featureMatrix, labelVector)
 
-            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'rf'}
+            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'rf', 'features': feature_cols}
         else:
             model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
                 if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
 
             model.fit(featureMatrix, labelVector)
 
-            return {'model': model, 'type': 'rf'}
+            return {'model': model, 'type': 'rf', 'features': feature_cols}
 
     def compute_precision_scores(self, y_pred, y_true, prob_thresholds):
         """
