@@ -478,13 +478,30 @@ def hamming_dist(row):
 
 
 def inverse_hamming_dist(row):
-    return 1.0 / jellyfish.hamming_distance(
+    return 1.0 / (
+        jellyfish.hamming_distance(
         UnicodeDammit(str(row["question1"])).markup.lower(),
-        UnicodeDammit(str(row["question2"])).markup.lower()
+        UnicodeDammit(str(row["question2"])).markup.lower())
+        or
+        1.0
     )
 
 
 def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights={}):
+    """
+    TODO:
+    - extract nouns, pronouns, verbs, propositions and compute
+        - shared nouns (singular), verbs (standardise tense, say present), object, pronouns, etc
+        - # of nouns q1
+        - # of nouns q2
+        - abs(# nouns q1 - # nouns q2)
+        - same above 3 features for pronouns, verbs, etc
+        - Are objects the same?
+    - fuzzy and distance features from
+    https://github.com/abhishekkrthakur/is_that_a_duplicate_quora_question/blob/master/feature_engineering.py
+    - Geography specific features: countries/cities in both questions
+    - Predictions from naive bayes questions classifier (for the U-Illinois labelled question set)
+    """
     df["q1_tokens"] = df["question1"].apply(clean_statement)
     df["q2_tokens"] = df["question2"].apply(clean_statement)
 
