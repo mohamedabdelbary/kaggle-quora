@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+import pandas
 from nlp import clean_statement
 
 from sklearn.cross_validation import train_test_split, StratifiedKFold
@@ -47,7 +48,7 @@ def xgboost_eval(act, pred):
     return 'error', binary_logloss(act, pred)
 
 
-def predict_rf(row, model):
+def predict_rf(row, model, feature_cols=["features"]):
     """
     Assumes row object has a `features` column
     with the same features as those on which
@@ -58,34 +59,35 @@ def predict_rf(row, model):
     return float(model.predict_proba(f)[0][1])
 
 
-def predict_xgboost(row, model):
+def predict_xgboost(row, model, feature_cols=["features"]):
     """
     Assumes row object has a `features` column
     with the same features as those on which
     `model` was trained
     """
-    return float(model.predict(np.array(row["features"]))[0])
+    row_df = pandas.DataFrame([row[feature_cols]])
+    row_array = np.array(row_df)
+    row_array = np.nan_to_num(row_array)
+    return float(model.predict(xgb.DMatrix(row_array))[0])
 
 
 class XgBoostModel():
-    n_trees = 400
-    max_depth = 4
+    n_boost_rounds = 400
+    max_depth = 5
+    objective = 'binary:logistic'
     eval_metric = "logloss"
-    early_stopping_rounds = 50
+    early_stopping_rounds = 70
     folds = 10
+    learning_rate = 0.3
+    scale_pos_weight = 1
+    gamma = 0.1
 
-    def train(self, training_df, cv=True):
-        """
-        Expects a `features` column which holds a
-        list of floats to be used as features for
-        the classifier and an integer `label` column
-        encoding the output to be predicted
-        """
-        featureMatrix, labelVector = training_df["features"], training_df["label"]
+    def train(self, training_df, feature_cols=["features"], cv=True):
+        featureMatrix, labelVector = training_df[feature_cols].values, training_df["label"]
         featureMatrix = np.array([list(f) for f in featureMatrix])
+        featureMatrix = np.nan_to_num(featureMatrix)
         labelVector = np.array(list(labelVector))
-
-        # fullMatrix = np.concatenate((featureMatrix, labelVector.T), axis=1)
+        labelVector = np.nan_to_num(labelVector)
 
         auc_list = []
         logloss_list = []
@@ -102,17 +104,31 @@ class XgBoostModel():
                 x_test = np.asarray(x_test)
                 y_test = np.asarray(y_test)
 
-                model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
-                model.fit(
-                    x_train,
-                    y_train,
-                    eval_metric=self.eval_metric,
-                    eval_set=[(x_train, y_train), (x_test, y_test)],
-                    verbose=True,
+                params = {}
+                params['objective'] = self.objective
+                params['eval_metric'] = self.eval_metric
+                params['eta'] = self.learning_rate
+                params['max_depth'] = self.max_depth
+                params['scale_pos_weight'] = self.scale_pos_weight
+                params['gamma'] = self.gamma
+                params['silent'] = 1
+
+                d_train = xgb.DMatrix(x_train, label=y_train)
+                d_valid = xgb.DMatrix(x_test, label=y_test)
+                
+                watchlist = [(d_train, 'train'), (d_valid, 'valid')]
+                
+                model = xgb.train(
+                    params,
+                    d_train,
+                    self.n_boost_rounds,
+                    watchlist,
                     early_stopping_rounds=self.early_stopping_rounds
                 )
 
-                predictions = model.predict(x_test)
+                x_test_df = pandas.DataFrame(x_test, columns=["feature_%s" % str(i) for i in range(x_test.shape[1])])
+                predictions = model.predict(xgb.DMatrix(x_test_df))
+
                 fprArray, tprArray, thres = roc_curve(y_test, predictions)
                 roc_auc = auc(fprArray, tprArray)
                 logloss = binary_logloss(y_test, predictions)
@@ -131,17 +147,36 @@ class XgBoostModel():
             print "Average AUC is {auc} and average Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
             print "Starting full model training!"
 
-            model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
-            model.fit(featureMatrix, labelVector, eval_metric=self.eval_metric)#, early_stopping_rounds=self.early_stopping_rounds)
+            # model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
+            # model.fit(featureMatrix, labelVector, eval_metric=self.eval_metric)#, early_stopping_rounds=self.early_stopping_rounds)
             # make prediction
             # preds = model.predict(x_test)
 
-            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss}
+            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'xgb'}
         else:
-            model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
-            model.fit(featureMatrix, labelVector, eval_metric=self.eval_metric)#, early_stopping_rounds=self.early_stopping_rounds)
+            params = {}
+            params['objective'] = self.objective
+            params['eval_metric'] = self.eval_metric
+            params['eta'] = self.learning_rate
+            params['max_depth'] = self.max_depth
+            params['scale_pos_weight'] = self.scale_pos_weight
+            params['gamma'] = self.gamma
+            params['silent'] = 1
 
-            return {'model': model}
+            d_train = xgb.DMatrix(featureMatrix, label=labelVector)
+            d_valid = xgb.DMatrix(featureMatrix, label=labelVector)
+            
+            watchlist = [(d_train, 'train'), (d_valid, 'valid')]
+            
+            model = xgb.train(
+                params,
+                d_train,
+                self.n_boost_rounds,
+                watchlist,
+                early_stopping_rounds=self.early_stopping_rounds
+            )
+
+            return {'model': model, 'type': 'xgb'}
 
 
 class RandomForestModel():
@@ -150,16 +185,18 @@ class RandomForestModel():
     rf_max_features = None
     folds = 10
 
-    def train(self, training_df, cv=True):
+    def train(self, training_df, feature_cols=["features"], cv=True):
         """
         Expects a `features` column which holds a
         list of floats to be used as features for
         the classifier and an integer `label` column
         encoding the output to be predicted
         """
-        featureMatrix, labelVector = training_df["features"], training_df["label"]
+        featureMatrix, labelVector = training_df[feature_cols].values, training_df["label"]
         featureMatrix = np.array([list(f) for f in featureMatrix])
+        featureMatrix = np.nan_to_num(featureMatrix)
         labelVector = np.array(list(labelVector))
+        labelVector = np.nan_to_num(labelVector)
 
         auc_list = []
         logloss_list = []
@@ -205,14 +242,14 @@ class RandomForestModel():
 
             model.fit(featureMatrix, labelVector)
 
-            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss}
+            return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'rf'}
         else:
             model = RandomForestClassifier(n_estimators=self.n_trees, max_features=self.rf_max_features, class_weight="auto")\
                 if self.rf_max_features else RandomForestClassifier(n_estimators=self.n_trees, class_weight="auto")
 
             model.fit(featureMatrix, labelVector)
 
-            return {'model': model}
+            return {'model': model, 'type': 'rf'}
 
     def compute_precision_scores(self, y_pred, y_true, prob_thresholds):
         """

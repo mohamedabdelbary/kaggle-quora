@@ -53,8 +53,8 @@ if __name__ == "__main__":
         print "DF chunk %s" % idx
         chunk_input_path = input_path.split(".")[0] + str(idx) + "." + input_path.split(".")[-1]
         df = pandas.read_csv(chunk_input_path)
-        df = feature_method(df)
         df["label"] = df["is_duplicate"].map(int)
+        df = feature_method(df)
 
         chunk_output_path = output_path.split(".")[0] + str(idx) + "." + output_path.split(".")[-1]
         df.to_csv(chunk_output_path, index=False)
