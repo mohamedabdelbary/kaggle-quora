@@ -16,10 +16,6 @@ if __name__ == "__main__":
     input_path = sys.argv[1]
     output_path = sys.argv[2]
     num_split = int(sys.argv[3])
-    # n_sample = 10000
-    # full_df = pandas.read_csv(input_path)
-    # rows = np.random.choice(full_df.index.values, n_sample)
-    # df = full_df.ix[rows]
 
     full_df = pandas.read_csv(input_path)
 
@@ -30,6 +26,15 @@ if __name__ == "__main__":
 
     with open(word_weights_path, 'rb') as word_weights_file:
         ngram_weights = pickle.load(word_weights_file)
+
+    try:
+        google_vectors_path = sys.argv[4]
+        google_q_vectors = {
+            "q1": pickle.load(open(os.path.join(google_vectors_path, 'q1_w2v.pkl'), 'rb')),
+            "q2": pickle.load(open(os.path.join(google_vectors_path, 'q2_w2v.pkl'), 'rb'))
+        }
+    except Exception:
+        google_q_vectors = {}
 
     print "Splitting dataset"
     idx = 0
@@ -49,15 +54,23 @@ if __name__ == "__main__":
         word_weights=ngram_weights)
 
     print "Starting feature construction!"
+    df_idx = 0
     for idx in range(num_split):
         print "DF chunk %s" % idx
         chunk_input_path = input_path.split(".")[0] + str(idx) + "." + input_path.split(".")[-1]
         df = pandas.read_csv(chunk_input_path)
         df["label"] = df["is_duplicate"].map(int)
+        google_q_vectors_subset = {
+            "q1": google_q_vectors["q1"][df_idx: df_idx + df.shape[0]],
+            "q2": google_q_vectors["q2"][df_idx: df_idx + df.shape[0]]
+        }
+        feature_method = partial(feature_method, q_vectors=google_q_vectors_subset)
         df = feature_method(df)
 
         chunk_output_path = output_path.split(".")[0] + str(idx) + "." + output_path.split(".")[-1]
         df.to_csv(chunk_output_path, index=False)
+
+        df_idx = df_idx + df.shape[0]
 
         # Removing temp input file
         os.remove(chunk_input_path)
