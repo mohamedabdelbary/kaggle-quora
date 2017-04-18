@@ -10,6 +10,10 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix
 
 import xgboost as xgb
 
+import keras
+from keras.models import Sequential
+from keras.layers import Dense, Dropout
+
 
 def set_overlap_score_model(questions_df):
     """
@@ -80,7 +84,7 @@ class XgBoostModel():
     folds = 10
     learning_rate = 0.3
     scale_pos_weight = 1
-    gamma = 0.1
+    gamma = 0.3
 
     def train(self, training_df, feature_cols=["features"], cv=True):
         featureMatrix, labelVector = training_df[feature_cols].values, training_df["label"]
@@ -287,3 +291,80 @@ class RandomForestModel():
             accuracy_scores.append((accuracy, prob_thres))
 
         return sorted(accuracy_scores, key=lambda (acc, prob): acc)
+
+
+class NeuralNetModel():
+    folds = 10
+
+    def train(self, training_df, feature_cols=["features"], cv=True):
+        featureMatrix, labelVector = training_df[feature_cols].values, training_df["label"]
+        featureMatrix = np.array([list(f) for f in featureMatrix])
+        featureMatrix = np.nan_to_num(featureMatrix)
+        labelVector = np.array(list(labelVector))
+        labelVector = np.nan_to_num(labelVector)
+
+        featureMatrix -= np.mean(featureMatrix, axis=0)
+        featureMatrix /= np.std(featureMatrix, axis=0)
+
+        featureMatrix = np.nan_to_num(featureMatrix)
+
+        auc_list = []
+        logloss_list = []
+
+        if cv:
+            idx = 1
+            for train, test in StratifiedKFold(labelVector, self.folds):
+                print "Starting Cross Validation Fold {}".format(idx)
+
+                x_train, y_train = featureMatrix[train], labelVector[train]
+                x_test, y_test = featureMatrix[test], labelVector[test]
+                x_train = np.asarray(x_train)
+                y_train = np.asarray(y_train)
+                x_test = np.asarray(x_test)
+                y_test = np.asarray(y_test)
+
+                model = Sequential()
+                model.add(Dense(x_train.shape[1], input_dim=x_train.shape[1], kernel_initializer='normal', activation='sigmoid'))
+                model.add(Dropout(0.5))
+                model.add(Dense(64, activation='relu'))
+                model.add(Dropout(0.5))
+                # model.add(Dense(8, activation='relu'))
+                # model.add(Dropout(0.5))
+                model.add(Dense(1, activation='sigmoid'))
+
+                # early_stopping = keras.callbacks.EarlyStopping(monitor='binary_crossentropy', patience=0, verbose=0, mode='auto')
+
+                model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+                model.fit(x_train, y_train, epochs=200, batch_size=10000) #, callbacks=[early_stopping])
+
+                scores = model.evaluate(x_test, y_test)
+                for m_idx in range(len(model.metrics_names)):
+                    print("\n%s: %.2f" % (model.metrics_names[m_idx], scores[m_idx]))
+
+                # predictions = model.predict_proba(x_test)[:, 1]
+                # fprArray, tprArray, thres = roc_curve(y_test, predictions)
+                # roc_auc = auc(fprArray, tprArray)
+                # logloss = binary_logloss(y_test, predictions)
+                # auc_list.append(roc_auc)
+                # logloss_list.append(logloss_list)
+
+                # print "CV Fold result: AUC is {auc} and Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
+                print "#########"
+
+                idx += 1
+
+            return
+
+            model = Sequential()
+
+            # TODO: Finish implementation
+
+            # return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'nnet', 'features': feature_cols}
+        else:
+            model = Sequential()
+
+            # TODO: Network architecture
+
+            model.fit(featureMatrix, labelVector)
+
+            return {'model': model, 'type': 'nnet', 'features': feature_cols}

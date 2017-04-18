@@ -6,8 +6,8 @@ import numpy as np
 import pandas
 from functools import partial
 from collections import Counter
-from nlp import features, construct_doc_list, train_lda, get_word_weights
-from model import set_overlap_score_model, binary_logloss, RandomForestModel, XgBoostModel, predict_rf
+from nlp import construct_doc_list, train_lda, get_word_weights
+from model import set_overlap_score_model, binary_logloss, RandomForestModel, XgBoostModel, NeuralNetModel
 
 from train_config import train_features
 
@@ -62,7 +62,11 @@ if __name__ == "__main__":
 
     elif model_type == 'xgb':
         model = XgBoostModel()
-        model_obj = model.train(df, feature_cols=train_features, cv=False)
+        model_obj = model.train(df, feature_cols=train_features)
+
+    elif model_type == 'nnet':
+        model = NeuralNetModel()
+        model_obj = model.train(df, feature_cols=train_features)
 
     print "<==================================>"
     print "Finished model training!"
