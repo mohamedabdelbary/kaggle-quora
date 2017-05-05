@@ -70,9 +70,10 @@ def predict_xgboost(row, model, feature_cols=["features"]):
     `model` was trained
     """
     row_df = pandas.DataFrame([row[feature_cols]])
-    row_array = np.array(row_df)
-    row_array = np.nan_to_num(row_array)
-    return float(model.predict(xgb.DMatrix(row_array))[0])
+    row_df.fillna(value=0.0, inplace=True)
+    # row_array = np.array(row_df)
+    # row_array = np.nan_to_num(row_array)
+    return float(model.predict(xgb.DMatrix(row_df))[0])
 
 
 class XgBoostModel():
@@ -82,14 +83,14 @@ class XgBoostModel():
     eval_metric = "logloss"
     early_stopping_rounds = 70
     folds = 10
-    learning_rate = 0.3
+    learning_rate = 0.5
     scale_pos_weight = 1
     gamma = 0.3
 
     def train(self, training_df, feature_cols=["features"], cv=True):
-        featureMatrix, labelVector = training_df[feature_cols].values, training_df["label"]
-        featureMatrix = np.array([list(f) for f in featureMatrix])
-        featureMatrix = np.nan_to_num(featureMatrix)
+        featureMatrix, labelVector = training_df[feature_cols], training_df["label"]
+        # featureMatrix = np.array([list(f) for f in featureMatrix])
+        # featureMatrix = np.nan_to_num(featureMatrix)
         labelVector = np.array(list(labelVector))
         labelVector = np.nan_to_num(labelVector)
 
@@ -98,8 +99,14 @@ class XgBoostModel():
 
         if cv:
             idx = 1
+            featureMatrix = np.array([list(f) for f in featureMatrix.values])
+            featureMatrix = np.nan_to_num(featureMatrix)
             for train, test in StratifiedKFold(labelVector, self.folds):
                 print "Starting Cross Validation Fold {}".format(idx)
+
+                if idx == 1:
+                    idx += 1
+                    continue
 
                 x_train, y_train = featureMatrix[train], labelVector[train]
                 x_test, y_test = featureMatrix[test], labelVector[test]
@@ -116,6 +123,7 @@ class XgBoostModel():
                 params['scale_pos_weight'] = self.scale_pos_weight
                 params['gamma'] = self.gamma
                 params['silent'] = 1
+                params['seed'] = 40 + idx
 
                 d_train = xgb.DMatrix(x_train, label=y_train)
                 d_valid = xgb.DMatrix(x_test, label=y_test)
@@ -167,9 +175,10 @@ class XgBoostModel():
             params['gamma'] = self.gamma
             params['silent'] = 1
 
+            featureMatrix.fillna(value=0.0, inplace=True)            
             d_train = xgb.DMatrix(featureMatrix, label=labelVector)
             d_valid = xgb.DMatrix(featureMatrix, label=labelVector)
-            
+
             watchlist = [(d_train, 'train'), (d_valid, 'valid')]
             
             model = xgb.train(
@@ -179,6 +188,11 @@ class XgBoostModel():
                 watchlist,
                 early_stopping_rounds=self.early_stopping_rounds
             )
+
+            # xgb.plot_importance(model)
+
+            # import pudb
+            # pudb.set_trace()
 
             return {'model': model, 'type': 'xgb', 'features': feature_cols}
 

@@ -116,5 +116,49 @@ train_features = [
     'skew_q1vec',
     'skew_q2vec',
     'kur_q1vec',
-    'kur_q2vec'
+    'kur_q2vec',
+
+    'standard_token_overlap_ratio',
+    'len_q1_standard',
+    'len_q2_standard',
+    'len_q1_punc',
+    'len_q2_punc',
+    'punc_overlap',
+
+    'q1_num_nouns',
+    'q2_num_nouns',
+    'noun_overlap',
+
+    'q1_num_verbs',
+    'q2_num_verbs',
+    'verb_overlap',
+
+    'q1_num_adjs',
+    'q2_num_adjs',
+    'adj_overlap',
+
+    'q1_num_advs',
+    'q2_num_advs',
+    'adv_overlap',
+
+    'q1_num_gen_tags',
+    'q2_num_gen_tags',
+    'gen_tag_overlap',
+
+    'q1_num_pronouns',
+    'q2_num_pronouns',
+    'pronoun_overlap',
+
+    'weighted_noun_overlap',
+    'noun_sets_equal',
+    'weighted_verb_overlap',
+    'verb_sets_equal',
+    'weighted_adj_overlap',
+    'adj_set_equal',
+    'weighted_adv_overlap',
+    'adv_set_equal',
+    'weighted_gen_tag_overlap',
+    'gen_tag_set_equal',
+    'weighted_pronoun_overlap',
+    'pronoun_set_equal'
 ]

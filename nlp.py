@@ -17,6 +17,7 @@ from gensim.models.keyedvectors import KeyedVectors
 from gensim.models.ldamodel import LdaModel
 from nltk.corpus import stopwords
 from textblob import TextBlob
+from pattern.en import parse
 
 from scipy.stats import skew, kurtosis
 from scipy.spatial.distance import cosine, cityblock, jaccard, canberra, euclidean, minkowski, braycurtis
@@ -26,8 +27,8 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-google_news_vectors_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/GoogleNews-vectors-negative300.bin.gz"
-google_news_vec_model = KeyedVectors.load_word2vec_format(google_news_vectors_path, binary=True)
+# google_news_vectors_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/GoogleNews-vectors-negative300.bin.gz"
+# google_news_vec_model = KeyedVectors.load_word2vec_format(google_news_vectors_path, binary=True)
 
 
 nlp = spacy.load("en")
@@ -40,6 +41,13 @@ common_q_token_pairs = [("why", "why"), ("how", "how"), ("what", "what"), ("when
 common_q_token_pairs.extend(
     list(permutations(list(common_question_tokens), 2))
 )
+
+noun_tags = set(['NN', 'NNS', 'NNP', 'NNPS'])
+verb_tags = set(['VB', 'VBZ', 'VBP', 'VBN', 'VBG'])
+adj_tags = set(['JJ', 'JJR', 'JJS'])
+adv_tags = set(['RB', 'RBR', 'RBS'])
+general_tags = set(['CC', 'DT', 'EX', 'IN'])
+pronoun_tags = set(['PRP'])
 
 
 def remove_punc(s):
@@ -504,6 +512,35 @@ def wmd(row, model):
     return model.wmdistance(s1, s2)
 
 
+def punc_overlap(row):
+    return (1.0 * len(row["q1_punc"].intersection(row["q2_punc"]))) / (len(row["q1_punc"].union(row["q2_punc"])) or 1.0)
+
+
+def standard_token_overlap_ratio(row):
+    q1_tokens, q2_tokens = row["q1_standard_tokens"], row["q2_standard_tokens"]
+
+    return float(len(q1_tokens.intersection(q2_tokens))) / (len(q1_tokens.union(q2_tokens)) or 1.0)
+
+
+def parse_structure(s):
+    if not isinstance(s, str):
+        return []
+    parts = parse(s, relations=True).split()
+    return parts[0] if parts else []
+
+
+def gen_token_overlap(token_set_1, token_set_2):
+    return float(len(token_set_1.intersection(token_set_2))) / (len(token_set_1.union(token_set_2)) or 1.0)
+
+
+def weighted_gen_token_overlap_score(token_set_1, token_set_2, row):
+    return float(len(token_set_1.intersection(token_set_2))) / (len(token_set_1.union(token_set_2)) or 1.0) * \
+        (
+            min(len(str(row["question1"])), len(str(row["question2"]))) / 
+            (1.0 * max(len(str(row["question1"])), len(str(row["question2"]))))
+        )
+
+
 def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights={}, q_vectors={}):
     """
     TODO:
@@ -519,6 +556,11 @@ def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights
     - Vector features from ^
     - Geography specific features: countries/cities in both questions
     - Predictions from naive bayes questions classifier (for the U-Illinois labelled question set)
+    - Variables from questions without cleaning
+    - Punctuation set overlap
+
+    - Num commas, periods, question marks, exclamation marks in each question
+    - Noun/Verb/Object/Pronoun overlap
     """
     # df["q1_tokens"] = df["question1"].apply(clean_statement)
     # df["q2_tokens"] = df["question2"].apply(clean_statement)
@@ -617,7 +659,7 @@ def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights
     # df["hamming_dist"] = df.apply(hamming_dist, axis=1)
     # df["inverse_hamming_dist"] = df.apply(inverse_hamming_dist, axis=1)
 
-    # fuzzy features (from https://github.com/abhishekkrthakur/is_that_a_duplicate_quora_question/blob/master/feature_engineering.py)
+    # # fuzzy features (from https://github.com/abhishekkrthakur/is_that_a_duplicate_quora_question/blob/master/feature_engineering.py)
     # df['fuzz_qratio'] = df.apply(lambda x: fuzz.QRatio(str(x['question1']), str(x['question2'])), axis=1)
     # df['fuzz_WRatio'] = df.apply(lambda x: fuzz.WRatio(str(x['question1']), str(x['question2'])), axis=1)
     # df['fuzz_partial_ratio'] = df.apply(lambda x: fuzz.partial_ratio(str(x['question1']), str(x['question2'])), axis=1)
@@ -626,40 +668,119 @@ def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights
     # df['fuzz_token_set_ratio'] = df.apply(lambda x: fuzz.token_set_ratio(str(x['question1']), str(x['question2'])), axis=1)
     # df['fuzz_token_sort_ratio'] = df.apply(lambda x: fuzz.token_sort_ratio(str(x['question1']), str(x['question2'])), axis=1)
 
-    wmd_meth = partial(wmd, model=google_news_vec_model)
-    df['wmd'] = df.apply(wmd_meth, axis=1)
+    # wmd_meth = partial(wmd, model=google_news_vec_model)
+    # df['wmd'] = df.apply(wmd_meth, axis=1)
 
-    google_news_vec_model.init_sims(replace=True)
-    wmd_meth = partial(wmd, model=google_news_vec_model)
-    df['norm_wmd'] = df.apply(wmd_meth, axis=1)
+    # google_news_vec_model.init_sims(replace=True)
+    # wmd_meth = partial(wmd, model=google_news_vec_model)
+    # df['norm_wmd'] = df.apply(wmd_meth, axis=1)
 
-    question1_vectors = q_vectors["q1"]
-    question2_vectors = q_vectors["q2"]
+    # question1_vectors = q_vectors["q1"]
+    # question2_vectors = q_vectors["q2"]
 
-    df['cosine_distance'] = [cosine(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
-                                                            np.nan_to_num(question2_vectors))]
+    # df['cosine_distance'] = [cosine(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
+    #                                                         np.nan_to_num(question2_vectors))]
 
-    df['cityblock_distance'] = [cityblock(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
-                                                                  np.nan_to_num(question2_vectors))]
+    # df['cityblock_distance'] = [cityblock(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
+    #                                                               np.nan_to_num(question2_vectors))]
 
-    df['jaccard_distance'] = [jaccard(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
-                                                              np.nan_to_num(question2_vectors))]
+    # df['jaccard_distance'] = [jaccard(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
+    #                                                           np.nan_to_num(question2_vectors))]
 
-    df['canberra_distance'] = [canberra(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
-                                                                np.nan_to_num(question2_vectors))]
+    # df['canberra_distance'] = [canberra(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
+    #                                                             np.nan_to_num(question2_vectors))]
 
-    df['euclidean_distance'] = [euclidean(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
-                                                                  np.nan_to_num(question2_vectors))]
+    # df['euclidean_distance'] = [euclidean(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
+    #                                                               np.nan_to_num(question2_vectors))]
 
-    df['minkowski_distance'] = [minkowski(x, y, 3) for (x, y) in zip(np.nan_to_num(question1_vectors),
-                                                                     np.nan_to_num(question2_vectors))]
+    # df['minkowski_distance'] = [minkowski(x, y, 3) for (x, y) in zip(np.nan_to_num(question1_vectors),
+    #                                                                  np.nan_to_num(question2_vectors))]
 
-    df['braycurtis_distance'] = [braycurtis(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
-                                                                    np.nan_to_num(question2_vectors))]
+    # df['braycurtis_distance'] = [braycurtis(x, y) for (x, y) in zip(np.nan_to_num(question1_vectors),
+    #                                                                 np.nan_to_num(question2_vectors))]
 
-    df['skew_q1vec'] = [skew(x) for x in np.nan_to_num(question1_vectors)]
-    df['skew_q2vec'] = [skew(x) for x in np.nan_to_num(question2_vectors)]
-    df['kur_q1vec'] = [kurtosis(x) for x in np.nan_to_num(question1_vectors)]
-    df['kur_q2vec'] = [kurtosis(x) for x in np.nan_to_num(question2_vectors)]
+    # df['skew_q1vec'] = [skew(x) for x in np.nan_to_num(question1_vectors)]
+    # df['skew_q2vec'] = [skew(x) for x in np.nan_to_num(question2_vectors)]
+    # df['kur_q1vec'] = [kurtosis(x) for x in np.nan_to_num(question1_vectors)]
+    # df['kur_q2vec'] = [kurtosis(x) for x in np.nan_to_num(question2_vectors)]
+
+    # # Previously computed features without cleaning up strings
+    # # Just lower casing
+    # df["q1_standard"] = df["question1"].apply(lambda x: str(x).lower())
+    # df["q2_standard"] = df["question2"].apply(lambda x: str(x).lower())
+
+    # df["q1_standard_tokens"] = df["q1_standard"].apply(lambda x: set(x.split(" ")))
+    # df["q2_standard_tokens"] = df["q2_standard"].apply(lambda x: set(x.split(" ")))
+
+    # df["standard_token_overlap_ratio"] = df.apply(standard_token_overlap_ratio, axis=1)
+
+    # df["len_q1_standard"] = df["q1_standard"].apply(lambda x: len(x))
+    # df["len_q2_standard"] = df["q2_standard"].apply(lambda x: len(x))
+
+    # # Get punctuation marks in questions
+    # df["q1_punc"] = df["q1_standard"].apply(lambda x: set(re.findall(r'[^\w\s]', x)))
+    # df["q2_punc"] = df["q2_standard"].apply(lambda x: set(re.findall(r'[^\w\s]', x)))
+
+    # # Punctuation features
+    # df["len_q1_punc"] = df["q1_punc"].apply(lambda x: len(x))
+    # df["len_q2_punc"] = df["q2_punc"].apply(lambda x: len(x))
+    # df["punc_overlap"] = df.apply(punc_overlap, axis=1)
+
+    # df["q1_structure_parts"] = df["q1_standard"].apply(lambda x: parse_structure(x))
+    # df["q2_structure_parts"] = df["q2_standard"].apply(lambda x: parse_structure(x))
+
+    # df["q1_nouns"] = df["q1_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in noun_tags]))
+    # df["q2_nouns"] = df["q2_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in noun_tags]))
+
+    # df["q1_verbs"] = df["q1_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in verb_tags]))
+    # df["q2_verbs"] = df["q2_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in verb_tags]))
+
+    # df["q1_adjs"] = df["q1_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in adj_tags]))
+    # df["q2_adjs"] = df["q2_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in adj_tags]))
+
+    # df["q1_advs"] = df["q1_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in adv_tags]))
+    # df["q2_advs"] = df["q2_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in adv_tags]))
+
+    # df["q1_gen_tags"] = df["q1_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in general_tags]))
+    # df["q2_gen_tags"] = df["q2_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in general_tags]))
+
+    # df["q1_pronouns"] = df["q1_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in pronoun_tags]))
+    # df["q2_pronouns"] = df["q2_structure_parts"].apply(lambda x: set([n[0] for n in x if n[1] in pronoun_tags]))
+
+    # df["q1_num_nouns"] = df["q1_nouns"].apply(lambda x: len(x))
+    # df["q2_num_nouns"] = df["q2_nouns"].apply(lambda x: len(x))
+    # df["noun_overlap"] = df.apply(lambda r: gen_token_overlap(r["q1_nouns"], r["q2_nouns"]), axis=1)
+    # df["weighted_noun_overlap"] = df.apply(lambda r: weighted_gen_token_overlap_score(r["q1_nouns"], r["q2_nouns"], r), axis=1)
+    # df["noun_sets_equal"] = df.apply(lambda r: float(r["noun_overlap"] == 1.0), axis=1)
+
+    # df["q1_num_verbs"] = df["q1_verbs"].apply(lambda x: len(x))
+    # df["q2_num_verbs"] = df["q2_verbs"].apply(lambda x: len(x))
+    # df["verb_overlap"] = df.apply(lambda r: gen_token_overlap(r["q1_verbs"], r["q2_verbs"]), axis=1)
+    # df["weighted_verb_overlap"] = df.apply(lambda r: weighted_gen_token_overlap_score(r["q1_verbs"], r["q2_verbs"], r), axis=1)
+    # df["verb_sets_equal"] = df.apply(lambda r: float(r["verb_overlap"] == 1.0), axis=1)
+
+    # df["q1_num_adjs"] = df["q1_adjs"].apply(lambda x: len(x))
+    # df["q2_num_adjs"] = df["q2_adjs"].apply(lambda x: len(x))
+    # df["adj_overlap"] = df.apply(lambda r: gen_token_overlap(r["q1_adjs"], r["q2_adjs"]), axis=1)
+    # df["weighted_adj_overlap"] = df.apply(lambda r: weighted_gen_token_overlap_score(r["q1_adjs"], r["q2_adjs"], r), axis=1)
+    # df["adj_set_equal"] = df.apply(lambda r: float(r["adj_overlap"] == 1.0), axis=1)
+
+    # df["q1_num_advs"] = df["q1_advs"].apply(lambda x: len(x))
+    # df["q2_num_advs"] = df["q2_advs"].apply(lambda x: len(x))
+    # df["adv_overlap"] = df.apply(lambda r: gen_token_overlap(r["q1_advs"], r["q2_advs"]), axis=1)
+    # df["weighted_adv_overlap"] = df.apply(lambda r: weighted_gen_token_overlap_score(r["q1_advs"], r["q2_advs"], r), axis=1)
+    # df["adv_set_equal"] = df.apply(lambda r: float(r["adv_overlap"] == 1.0), axis=1)
+
+    # df["q1_num_gen_tags"] = df["q1_gen_tags"].apply(lambda x: len(x))
+    # df["q2_num_gen_tags"] = df["q2_gen_tags"].apply(lambda x: len(x))
+    # df["gen_tag_overlap"] = df.apply(lambda r: gen_token_overlap(r["q1_gen_tags"], r["q2_gen_tags"]), axis=1)
+    # df["weighted_gen_tag_overlap"] = df.apply(lambda r: weighted_gen_token_overlap_score(r["q1_gen_tags"], r["q2_gen_tags"], r), axis=1)
+    # df["gen_tag_set_equal"] = df.apply(lambda r: float(r["gen_tag_overlap"] == 1.0), axis=1)
+
+    # df["q1_num_pronouns"] = df["q1_pronouns"].apply(lambda x: len(x))
+    # df["q2_num_pronouns"] = df["q2_pronouns"].apply(lambda x: len(x))
+    # df["pronoun_overlap"] = df.apply(lambda r: gen_token_overlap(r["q1_pronouns"], r["q2_pronouns"]), axis=1)
+    # df["weighted_pronoun_overlap"] = df.apply(lambda r: weighted_gen_token_overlap_score(r["q1_pronouns"], r["q2_pronouns"], r), axis=1)
+    # df["pronoun_set_equal"] = df.apply(lambda r: float(r["pronoun_overlap"] == 1.0), axis=1)
 
     return df

@@ -62,7 +62,8 @@ if __name__ == "__main__":
 
     elif model_type == 'xgb':
         model = XgBoostModel()
-        model_obj = model.train(df, feature_cols=train_features)
+        # model_obj = model.train(df, feature_cols=train_features)
+        model_obj = model.train(df, feature_cols=train_features, cv=False)
 
     elif model_type == 'nnet':
         model = NeuralNetModel()
@@ -72,12 +73,9 @@ if __name__ == "__main__":
     print "Finished model training!"
 
     print "Saving training results!"
-    models = {
-        model_type: model_obj["model"],
-    }
 
     # df.to_csv(train_pred_path, index=False)
     with open(models_path, 'wb') as models_file:
-        pickle.dump(models, models_file, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(model_obj, models_file, protocol=pickle.HIGHEST_PROTOCOL)
 
     print "Done with Training!!"

@@ -5,6 +5,7 @@ word_weights_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/word_weights
 import os
 import sys
 import pickle
+import cPickle
 import numpy as np
 import pandas
 from functools import partial
@@ -29,10 +30,26 @@ if __name__ == "__main__":
 
     try:
         google_vectors_path = sys.argv[4]
-        google_q_vectors = {
-            "q1": pickle.load(open(os.path.join(google_vectors_path, 'q1_w2v.pkl'), 'rb')),
-            "q2": pickle.load(open(os.path.join(google_vectors_path, 'q2_w2v.pkl'), 'rb'))
-        }
+        google_q_vectors = {"q1": [], "q2": []}
+        q1 = []
+        with open(os.path.join(google_vectors_path, 'q1_w2v.pkl'), 'rb') as f:
+            try:
+                while True:
+                    google_q_vectors["q1"].append(cPickle.load(f))
+            except EOFError:
+                pass
+
+        with open(os.path.join(google_vectors_path, 'q2_w2v.pkl'), 'rb') as f:
+            try:
+                while True:
+                    google_q_vectors["q2"].append(cPickle.load(f))
+            except EOFError:
+                pass
+
+        # google_q_vectors = {
+        #     "q1": pickle.load(open(os.path.join(google_vectors_path, 'q1_w2v.pkl'), 'rb')),
+        #     "q2": pickle.load(open(os.path.join(google_vectors_path, 'q2_w2v.pkl'), 'rb'))
+        # }
     except Exception:
         google_q_vectors = {}
 

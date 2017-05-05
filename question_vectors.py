@@ -47,5 +47,18 @@ question2_vectors  = np.zeros((df.shape[0], 300))
 for i, q in tqdm(enumerate(df.question2.values)):
     question2_vectors[i, :] = sent2vec(q)
 
-pickle.dump(question1_vectors, open(os.path.join(output_path, 'q1_w2v.pkl'), 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
-pickle.dump(question2_vectors,  open(os.path.join(output_path, 'q2_w2v.pkl'), 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+import pudb
+pudb.set_trace()
+
+f_q1 = open(os.path.join(output_path, 'q1_w2v.pkl'), 'wb')
+f_q2 = open(os.path.join(output_path, 'q2_w2v.pkl'), 'wb')
+
+for q in question1_vectors:
+    pickle.dump(q, f_q1, protocol=pickle.HIGHEST_PROTOCOL)
+
+f_q1.close()
+
+for q in question2_vectors:
+    pickle.dump(q, f_q2, protocol=pickle.HIGHEST_PROTOCOL)
+
+f_q2.close()
