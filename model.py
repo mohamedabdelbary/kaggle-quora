@@ -71,26 +71,49 @@ def predict_xgboost(row, model, feature_cols=["features"]):
     """
     row_df = pandas.DataFrame([row[feature_cols]])
     row_df.fillna(value=0.0, inplace=True)
+
     # row_array = np.array(row_df)
     # row_array = np.nan_to_num(row_array)
+
     return float(model.predict(xgb.DMatrix(row_df))[0])
 
 
+def updownsampling(X_train, y_train):
+    if type(X_train) != pandas.DataFrame:
+        pos_train = pandas.DataFrame(X_train[y_train == 1])
+        neg_train = pandas.DataFrame(X_train[y_train == 0])
+    else:
+        pos_train = X_train[y_train == 1]
+        neg_train = X_train[y_train == 0]
+    X_train = pandas.concat((neg_train, pos_train.iloc[:int(0.8*len(pos_train))], neg_train))
+    y_train = np.array([0] * neg_train.shape[0] + [1] * pos_train.iloc[:int(0.8*len(pos_train))].shape[0] + [0] * neg_train.shape[0])
+    print(np.mean(y_train))
+    del pos_train, neg_train
+
+    # pos_valid = pandas.DataFrame(X_valid[y_valid == 1])
+    # neg_valid = pandas.DataFrame(X_valid[y_valid == 0])
+    # X_valid = pandas.concat((neg_valid, pos_valid.iloc[:int(0.8 * len(pos_valid))], neg_valid))
+    # y_valid = np.array([0] * neg_valid.shape[0] + [1] * pos_valid.iloc[:int(0.8 * len(pos_valid))].shape[0] + [0] * neg_valid.shape[0])
+    # print(np.mean(y_valid))
+    # del pos_valid, neg_valid
+
+    return X_train, y_train
+
+
 class XgBoostModel():
-    n_boost_rounds = 400
-    max_depth = 5
+    n_boost_rounds = 2000
+    max_depth = 6
     objective = 'binary:logistic'
     eval_metric = "logloss"
     early_stopping_rounds = 70
     folds = 10
-    learning_rate = 0.5
+    learning_rate = 0.05
     scale_pos_weight = 1
     gamma = 0.3
+    subsample = 0.6
 
     def train(self, training_df, feature_cols=["features"], cv=True):
         featureMatrix, labelVector = training_df[feature_cols], training_df["label"]
-        # featureMatrix = np.array([list(f) for f in featureMatrix])
-        # featureMatrix = np.nan_to_num(featureMatrix)
         labelVector = np.array(list(labelVector))
         labelVector = np.nan_to_num(labelVector)
 
@@ -104,12 +127,12 @@ class XgBoostModel():
             for train, test in StratifiedKFold(labelVector, self.folds):
                 print "Starting Cross Validation Fold {}".format(idx)
 
-                if idx == 1:
-                    idx += 1
-                    continue
-
                 x_train, y_train = featureMatrix[train], labelVector[train]
                 x_test, y_test = featureMatrix[test], labelVector[test]
+
+                x_train, y_train = updownsampling(x_train, y_train)
+                x_test, y_test = updownsampling(x_test, y_test)
+
                 x_train = np.asarray(x_train)
                 y_train = np.asarray(y_train)
                 x_test = np.asarray(x_test)
@@ -123,7 +146,8 @@ class XgBoostModel():
                 params['scale_pos_weight'] = self.scale_pos_weight
                 params['gamma'] = self.gamma
                 params['silent'] = 1
-                params['seed'] = 40 + idx
+                # params['seed'] = 40 + idx
+                params['subsample'] = self.subsample
 
                 d_train = xgb.DMatrix(x_train, label=y_train)
                 d_valid = xgb.DMatrix(x_test, label=y_test)
@@ -159,11 +183,6 @@ class XgBoostModel():
             print "Average AUC is {auc} and average Log Loss is {loss}".format(auc=roc_auc, loss=logloss)
             print "Starting full model training!"
 
-            # model = xgb.XGBClassifier(max_depth=self.max_depth, n_estimators=self.n_trees)
-            # model.fit(featureMatrix, labelVector, eval_metric=self.eval_metric)#, early_stopping_rounds=self.early_stopping_rounds)
-            # make prediction
-            # preds = model.predict(x_test)
-
             return {'model': model, 'roc_auc': roc_auc, 'logloss': logloss, 'type': 'xgb', 'features': feature_cols}
         else:
             params = {}
@@ -173,9 +192,13 @@ class XgBoostModel():
             params['max_depth'] = self.max_depth
             params['scale_pos_weight'] = self.scale_pos_weight
             params['gamma'] = self.gamma
+            params['subsample'] = self.subsample
             params['silent'] = 1
 
-            featureMatrix.fillna(value=0.0, inplace=True)            
+            # featureMatrix.fillna(value=0.0, inplace=True)
+            featureMatrix = np.array([list(f) for f in featureMatrix.values])
+            featureMatrix = np.nan_to_num(featureMatrix)
+            featureMatrix, labelVector = updownsampling(featureMatrix, labelVector)      
             d_train = xgb.DMatrix(featureMatrix, label=labelVector)
             d_valid = xgb.DMatrix(featureMatrix, label=labelVector)
 
@@ -190,9 +213,6 @@ class XgBoostModel():
             )
 
             # xgb.plot_importance(model)
-
-            # import pudb
-            # pudb.set_trace()
 
             return {'model': model, 'type': 'xgb', 'features': feature_cols}
 

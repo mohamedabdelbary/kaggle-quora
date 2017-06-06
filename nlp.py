@@ -7,7 +7,7 @@ import math
 import jellyfish
 from fuzzywuzzy import fuzz
 from functools import partial
-from collections import Counter
+from collections import Counter, defaultdict
 from bs4 import UnicodeDammit
 from itertools import permutations
 
@@ -26,7 +26,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics.pairwise import cosine_similarity
 
-
+base_data_dir = "/Users/mohamedabdelbary/Documents/kaggle_quora/"
 # google_news_vectors_path = "/Users/mohamedabdelbary/Documents/kaggle_quora/GoogleNews-vectors-negative300.bin.gz"
 # google_news_vec_model = KeyedVectors.load_word2vec_format(google_news_vectors_path, binary=True)
 
@@ -48,6 +48,35 @@ adj_tags = set(['JJ', 'JJR', 'JJS'])
 adv_tags = set(['RB', 'RBR', 'RBS'])
 general_tags = set(['CC', 'DT', 'EX', 'IN'])
 pronoun_tags = set(['PRP'])
+
+
+# Leaky questions analysis (see https://www.kaggle.com/act444/lb-0-158-xgb-handcrafted-leaky)
+# df_train = pandas.read_csv(base_data_dir + 'train.csv')
+# df_train = df_train.fillna(' ')
+
+# df_test = pandas.read_csv(base_data_dir + 'test.csv')
+# ques = pandas.concat([df_train[['question1', 'question2']], \
+#     df_test[['question1', 'question2']]], axis=0).reset_index(drop='index')
+# q_dict = defaultdict(set)
+# for i in range(ques.shape[0]):
+#     q_dict[ques.question1[i]].add(ques.question2[i])
+#     q_dict[ques.question2[i]].add(ques.question1[i])
+
+
+# del df_train
+# del df_test
+
+
+def q1_freq(row):
+    return(len(q_dict[row['question1']]))
+
+
+def q2_freq(row):
+    return(len(q_dict[row['question2']]))
+
+
+def q1_q2_intersect(row):
+    return(len(set(q_dict[row['question1']]).intersection(set(q_dict[row['question2']]))))
 
 
 def remove_punc(s):
@@ -782,5 +811,10 @@ def compute_features(df, lda_model, word2idx_dict, n_lda_topics=10, word_weights
     # df["pronoun_overlap"] = df.apply(lambda r: gen_token_overlap(r["q1_pronouns"], r["q2_pronouns"]), axis=1)
     # df["weighted_pronoun_overlap"] = df.apply(lambda r: weighted_gen_token_overlap_score(r["q1_pronouns"], r["q2_pronouns"], r), axis=1)
     # df["pronoun_set_equal"] = df.apply(lambda r: float(r["pronoun_overlap"] == 1.0), axis=1)
+
+    # Leaky features analysis
+    df['q1_q2_intersect'] = df.apply(q1_q2_intersect, axis=1, raw=True)
+    df['q1_freq'] = df.apply(q1_freq, axis=1, raw=True)
+    df['q2_freq'] = df.apply(q2_freq, axis=1, raw=True)
 
     return df

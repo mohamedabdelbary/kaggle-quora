@@ -49,7 +49,7 @@ if __name__ == "__main__":
     # df = full_df.ix[rows]
 
     df = read_data(train_set_features_path)
-    df = oversample_non_duplicates(df)
+    # df = oversample_non_duplicates(df)
 
     print "<=================================>"
     print "Starting model training!"
